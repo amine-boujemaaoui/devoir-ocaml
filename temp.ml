@@ -4,10 +4,9 @@ type 'a action =
   | Silent
 
 type 'a pre_process =
-  | Pre of 'a * 'a pre_process
+  | Pre of 'a process * 'a pre_process
   | Empty
-
-type 'a process =
+and 'a process =
   | Skip
   | Action of 'a action
   | Plus of 'a pre_process * 'a pre_process
