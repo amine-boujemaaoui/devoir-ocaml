@@ -28,7 +28,7 @@ let rec generate_tree process action =
   | Plus (pre_p1, pre_p2) ->
     let tree1 = generate_tree_pre pre_p1 action in
     let tree2 = generate_tree_pre pre_p2 action in
-    Node (ActionTransition Silent, [Node (ActionTransition (Act action), [tree1]); Node (ActionTransition (Act action), [tree2])])
+    Node (ActionTransition action, [Node (ActionTransition action, [tree1]); Node (ActionTransition action, [tree2])])
   | Parallel (p1, p2) ->
     let tree1 = generate_tree p1 action in
     let tree2 = generate_tree p2 action in
@@ -41,38 +41,66 @@ and generate_tree_pre pre_process action =
     Node (ActionTransition (Act a), [tree])
   | Empty -> Leaf Skip
 
-let execution_tree process =
+let execution_tree (process : string process) =
   generate_tree process Silent
 
-(* Define a function to extract the action from a pre-process *)
-let rec get_action_from_pre pre_p =
-  match pre_p with
-  | Pre (action, _) -> action
-  | Empty -> Silent  (* Return Silent for an empty pre-process *)
+let rec process_simulates p q =
+  match (p, q) with
+  | (Skip, _) -> true
+  | (_, Skip) -> false
+  | (Action a1, Action a2) -> a1 = a2
+  | (Plus (pre_p1, pre_p2), Plus (pre_q1, pre_q2)) ->
+    ((process_simulates_pre pre_p1 pre_q1 && process_simulates_pre pre_p2 pre_q2) ||
+    (process_simulates_pre pre_p1 pre_q2 && process_simulates_pre pre_p2 pre_q1))
+  | (Parallel (p1, p2), Parallel (q1, q2)) ->
+    (process_simulates p1 q1) && (process_simulates p2 q2)
+  | _ -> false
 
-(* Define a function to check if a process simulates a pre-process *)
-let rec process_simulates pre_p p =
-  match (pre_p, p) with
-  | (Empty, _) -> true  (* Any process can simulate an empty pre-process *)
-  | (Pre (pre_action, _), Action p_action) -> pre_action = p_action  (* Action in pre-process should match Action in process *)
-  | (Pre (pre_action, _), Plus (pre_p1, pre_p2)) ->
-    process_simulates (Pre (pre_action, Empty)) pre_p1 || process_simulates (Pre (pre_action, Empty)) pre_p2  (* Either pre-process should simulate the action *)
-  | (Pre (pre_action, _), Parallel (p1, p2)) ->
-    process_simulates (Pre (pre_action, Empty)) p1 && process_simulates (Pre (pre_action, Empty)) p2  (* Both parallel components should simulate the action *)
-  | _ -> false  (* In all other cases, P does not simulate Q *)
+and process_simulates_pre pre_p pre_q =
+  match (pre_p, pre_q) with
+  | (Empty, _) -> true
+  | (_, Empty) -> false
+  | (Pre (a1, rest_p), Pre (a2, rest_q)) ->
+    (a1 = a2) && (process_simulates_pre rest_p rest_q)
 
-let simulates p q =
-  process_simulates q p
+let rec string_of_tree = function
+  | Leaf process -> string_of_process process
+  | Node (transition, trees) -> 
+    "(" ^ (string_of_transition transition) ^ " . [" ^ (String.concat " + " (List.map string_of_tree trees)) ^ "])"
 
-let coin = Action (Act "coin")
-let tea = Action (Act "tea")
-let coffee = Action (Act "coffee")
+and string_of_process = function
+  | Skip -> "Skip"
+  | Action action -> string_of_action action
+  | Plus (pre_p1, pre_p2) -> "(" ^ (string_of_pre_process pre_p1) ^ " + " ^ (string_of_pre_process pre_p2) ^ ")"
+  | Parallel (p1, p2) -> "(" ^ (string_of_process p1) ^ " || " ^ (string_of_process p2) ^ ")"
 
-let m1 = Plus (Parallel (coin, Skip), Parallel (tea, Skip))
-let m2 = Plus (Parallel (Parallel (coin, tea), Skip), Parallel (Parallel (coin, coffee), Skip))
+and string_of_action = function
+  | Act a -> a
+  | CoAct a -> "not " ^ a
+  | Silent -> "Silent"
 
-let result = simulates m1 m2
+and string_of_pre_process = function
+  | Pre (a, pre_process) -> a ^ " . " ^ (string_of_pre_process pre_process)
+  | Empty -> "Empty"
 
-(* Output the result *)
-let () =
-  Printf.printf "M1 ⪯ M2: %b\n" result
+and string_of_transition = function
+  | ActionTransition action -> string_of_action action
+  | SilentTransition -> "SilentTransition"
+
+let coin = "coin"
+let tea = "tea"
+let coffee = "coffee"
+
+let m1 = Plus (Pre (coin, Pre (tea, Empty)), Pre (coin, Pre (coffee, Empty)))
+let m2 = Plus (Pre (coin, Pre (tea, Empty)), Pre (coin, Pre (coffee, Empty)))
+
+let _ = print_endline (string_of_bool (process_simulates m2 m1))  (* devrait afficher "true" *)
+let _ = print_endline (string_of_bool (process_simulates m1 m2))  (* devrait afficher "false" *)
+
+let _ = 
+  let tree = execution_tree m1 in
+  print_endline (string_of_tree tree)
+
+  let _ = 
+  let tree = execution_tree m2 in
+  print_endline (string_of_tree tree)
