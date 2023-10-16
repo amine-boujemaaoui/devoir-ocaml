@@ -1,0 +1,4 @@
+(lang dune 3.11)
+(name devoir_ocaml)
+(sections (lib .) (bin ../../bin))
+(files (lib (META dune-package opam)) (bin (devoir_ocaml)))
