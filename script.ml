@@ -1,5 +1,3 @@
-
-
 type 'a action =
   | Act of 'a
   | CoAct of 'a
@@ -63,6 +61,19 @@ and string_of_action = function
 
 and string_of_pre_process (action, process) =
   string_of_action action ^ " -> " ^ string_of_process process
+    
+let rec bisimulate p q =
+  match (p, q) with
+  | (Skip, Skip) -> true
+  | (Pre (a1, pre_p), Pre (a2, pre_q)) when a1 = a2 -> bisimulate pre_p pre_q
+  | (Plus (pre_p1, pre_p2), Plus (pre_q1, pre_q2)) ->
+      (bisimulate (snd pre_p1) (snd pre_q1) && bisimulate (snd pre_p2) (snd pre_q2)) ||
+      (bisimulate (snd pre_p1) (snd pre_q2) && bisimulate (snd pre_p2) (snd pre_q1))
+  | (Parallel (p1, p2), Parallel (q1, q2)) ->
+      bisimulate p1 q1 && bisimulate p2 q2
+  | (_, _) -> false
+
+    
 
 let rec process_simulates p q =
   match (p, q) with
@@ -78,18 +89,36 @@ let rec process_simulates p q =
   | (Parallel (p1, p2), Parallel (q1, q2)) ->
       (process_simulates p1 q1 && process_simulates p2 q2) ||
       (process_simulates p1 q2 && process_simulates p2 q1)
+  | (Plus (pre_p1, pre_p2), Plus (pre_q1, pre_q2)) ->
+      (bisimulate (snd pre_p1) (snd pre_q1) && bisimulate (snd pre_p2) (snd pre_q2)) ||
+      (bisimulate (snd pre_p1) (snd pre_q2) && bisimulate (snd pre_p2) (snd pre_q1))
+  | (Parallel (p1, p2), Parallel (q1, q2)) ->
+      bisimulate p1 q1 && bisimulate p2 q2
   | _, _ -> false
+    
 
 let m1 = Pre (Act "coin", Plus ((Act "tea", Skip), (Act "coffee", Skip)))
 let m2 = Plus ((Act "coin", Pre (Act "tea", Skip)), (CoAct "coin", Pre (CoAct "coffee", Skip)))
+let m3 = Parallel(Skip,m1)
 
 let _ = 
-let m2m1 = process_simulates m2 m1 in
-let m1m2 = process_simulates m1 m2 in
-Printf.printf "m2m1 = %b\n" m2m1;  (* devrait afficher "false" *)
-Printf.printf "m1m2 = %b\n" m1m2;   (* devrait afficher "true" *)
+  let m2m1 = process_simulates m2 m1 in
+  let m1m2 = process_simulates m1 m2 in
+  Printf.printf "m2m1 = %b\n" m2m1;  (* devrait afficher "false" *)
+  Printf.printf "m1m2 = %b\n" m1m2;   (* devrait afficher "true" *)
+
 ;;
 
+let test_bisimulation_m1_m2 () = 
+  let result = bisimulate m2 m1 in
+  if result then
+    print_endline "Test de bisimulation réussi : M1 ∼ M2"
+  else
+    print_endline "Test de bisimulation échoué : M1 et M2 ne sont pas bisimilaires"
+;;
+
+test_bisimulation_m1_m2 () ;;
+  
 let _ = let tree = generate_tree m2 in print_endline (string_of_tree "" tree)
 let _ = print_endline "\n";;
 
