@@ -29,8 +29,8 @@ let rec generate_tree process =
       let tree = generate_tree p in
       Node (ActionTransition a, [tree])
   | Plus (pre_p1, pre_p2) ->
-      let tree1 = generate_tree (snd pre_p1) in
-      let tree2 = generate_tree (snd pre_p2) in
+      let tree1 = generate_tree (Pre pre_p1) in
+      let tree2 = generate_tree (Pre pre_p2) in
       Node (SilentTransition, [tree1; tree2])
   | Parallel (p1, p2) ->
       let tree1 = generate_tree p1 in
@@ -40,28 +40,29 @@ let rec generate_tree process =
 let execution_tree (process : 'a process) =
   generate_tree process
 
-let rec string_of_tree = function
-  | Leaf process -> string_of_process process
+let rec string_of_tree indent = function
+  | Leaf process -> indent ^ string_of_process process
   | Node (transition, trees) -> 
-      "(" ^ (string_of_transition transition) ^ " . [" ^ (String.concat " + " (List.map string_of_tree trees)) ^ "])"
+      match transition with
+      | SilentTransition -> 
+          String.concat "\n" (List.map (string_of_tree (indent ^ "| ")) trees)
+      | ActionTransition action -> 
+          indent ^ "+- " ^ (string_of_action action) ^ "\n" ^
+          (String.concat "\n" (List.map (string_of_tree (indent ^ "| ")) trees))
 
 and string_of_process = function
   | Skip -> "Skip"
-  | Pre (action, process) -> string_of_action action ^ "." ^ string_of_process process
+  | Pre (action, process) -> string_of_action action ^ " -> " ^ string_of_process process
   | Plus (pre_p1, pre_p2) -> "(" ^ (string_of_pre_process pre_p1) ^ " + " ^ (string_of_pre_process pre_p2) ^ ")"
   | Parallel (p1, p2) -> "(" ^ (string_of_process p1) ^ " || " ^ (string_of_process p2) ^ ")"
 
 and string_of_action = function
   | Act a -> a
-  | CoAct a -> "not " ^ a
+  | CoAct a -> "not(" ^ a ^ ")"
   | Silent -> "Silent"
 
 and string_of_pre_process (action, process) =
-  string_of_action action ^ "." ^ string_of_process process
-
-and string_of_transition = function
-  | ActionTransition action -> string_of_action action
-  | SilentTransition -> "SilentTransition"
+  string_of_action action ^ " -> " ^ string_of_process process
 
 let rec process_simulates p q =
   match (p, q) with
@@ -80,15 +81,21 @@ let rec process_simulates p q =
   | _, _ -> false
 
 let m1 = Pre (Act "coin", Plus ((Act "tea", Skip), (Act "coffee", Skip)))
-let m2 = Plus ((Act "coin", Pre (Act "tea", Skip)), (Act "coin", Pre (Act "coffee", Skip)))
-
-
-
+let m2 = Plus ((Act "coin", Pre (Act "tea", Skip)), (CoAct "coin", Pre (CoAct "coffee", Skip)))
 
 let _ = 
 let m2m1 = process_simulates m2 m1 in
 let m1m2 = process_simulates m1 m2 in
 Printf.printf "m2m1 = %b\n" m2m1;  (* devrait afficher "false" *)
 Printf.printf "m1m2 = %b\n" m1m2;   (* devrait afficher "true" *)
-Printf.printf "Arbre m1:\n%s\n" (string_of_tree (execution_tree m1));
-Printf.printf "Arbre m2:\n%s\n" (string_of_tree (execution_tree m2));
+;;
+
+let _ = let tree = generate_tree m2 in print_endline (string_of_tree "" tree)
+let _ = print_endline "\n";;
+
+let _ = let tree = generate_tree m1 in print_endline (string_of_tree "" tree)
+let _ = print_endline "\n";;
+
+let um_parallel = Parallel (Pre (Act "tea", Pre (Act "coin", Skip)), Pre (Act "tea", Pre (Act "coin", Skip)))
+
+let _ = let tree = generate_tree um_parallel in  print_endline (string_of_tree "" tree)
